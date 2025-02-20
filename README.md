@@ -47,15 +47,9 @@ Go right, then go down, and go around the circles. ([Solution.cs](./Solution.cs)
 private static IStep? MoveStep(IStep currentStep, Question question)
     => currentStep switch
     {
-        RightLineStep rightLineStep =>
-            MoveRight(rightLineStep, question),
-
-        DownLineStep downLineStep =>
-            MoveDown(downLineStep, question),
-
-        ArcStep arcStep =>
-            MoveArc(arcStep, question),
-
+        RightLineStep rightLineStep => MoveRight(rightLineStep, question),
+        DownLineStep downLineStep => MoveDown(downLineStep, question),
+        ArcStep arcStep => MoveArc(arcStep, question),
         _ => throw new InvalidOperationException(),
     };
 ```
@@ -65,19 +59,15 @@ private static IStep? MoveStep(IStep currentStep, Question question)
 "Go around the circles" is intuitive for humans but challenging to implement in code. Without visualizing it on a chart, we are left with just a series of intersection points.
 
 ```csharp
-private static IEnumerable<ArcNext> GetArcNexts(
-    ArcStep currentStep, Question question)
+private static IEnumerable<ArcNext> GetArcNexts(ArcStep currentStep, Question question)
 {
-    var circles = question.Circles
-        .Except(new[] { currentStep.Circle });
+    var circles = question.Circles.Except(new[] { currentStep.Circle });
 
     return circles.SelectMany(circle =>
         GetCircleIntersects(currentStep.Circle, circle)
         .Where(intersect =>
-            intersect.X > 0
-            && intersect.X < question.Area.Width
-            && intersect.Y > 0
-            && intersect.Y < question.Area.Height)
+            intersect.X > 0 && intersect.X < question.Area.Width
+            && intersect.Y > 0 && intersect.Y < question.Area.Height)
         .Select(intersect => new ArcNext(
             Math.Atan2(
                 intersect.Y - currentStep.Circle.Y,
