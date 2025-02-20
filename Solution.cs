@@ -116,11 +116,9 @@ public class Solution
 
     private static IStep? MoveArc(ArcStep currentStep, Question question)
     {
-        var shit = Math.Atan2(
+        var currentAngle = Math.Atan2(
             currentStep.Y - currentStep.Circle.Y,
-            currentStep.X - currentStep.Circle.X);
-
-        var currentAngle = shit;
+            currentStep.X - currentStep.Circle.X); ;
 
         while (currentAngle >= Math.PI * 2)
         {
@@ -138,7 +136,7 @@ public class Solution
             .Concat(GetArcNexts(currentStep, question))
             .ToArray();
 
-        var nexts2 = nexts
+        return nexts
             .Select(next =>
             {
                 var angle = next.Angle;
@@ -167,9 +165,6 @@ public class Solution
 
                 return new ArcNext(angle, next.Step);
             })
-            .ToArray();
-
-        return nexts2
             .OrderBy(next => next.Angle)
             .Select(next => next.Step)
             .LastOrDefault();
