@@ -4,283 +4,162 @@ public class Solution
     {
         var question = new Question(
             new Area(xCorner, yCorner),
-            circles.Select(c => new Circle(c[0], c[1], c[2])).ToArray());
+            circles.Select(c => new Circle(c[0], c[1], c[2])).ToList());
 
-        var abc = Covering(question);
-
-        return !Covering(question)
-            && Explore(question);
+        return Explore(question) == null;
     }
 
-    private static bool Covering(Question question)
-        => question.Circles.Where(c =>
-            ((long)c.X * c.X + (long)c.Y * c.Y
-                <= (long)c.Radius * c.Radius)
-            || (((long)c.X - question.Area.Width) * ((long)c.X - question.Area.Width)
-                + ((long)c.Y - question.Area.Height) * ((long)c.Y - question.Area.Height)
-                <= (long)c.Radius * c.Radius))
-            .Any();
-
-    private static bool Explore(Question question)
+    public static Path? Explore(Question question)
     {
-        List<IStep> steps = new();
-        IStep currentStep = new RightLineStep(0);
+        var startPaths = new List<Path>();
+        var endPaths = new List<Path>();
+        var currentCircles = new Queue<Circle>();
 
-        for (var i = 0; i < question.Circles.Length * 3 + 50; i++)
+        foreach (var circle in question.Circles)
         {
-            var nextStep = MoveStep(currentStep, question);
-
-            switch (nextStep)
+            if (PointCovering(0, 0, circle)
+                || PointCovering(question.Area.Width, question.Area.Height, circle))
             {
-                case null: return false;
-                case CornerEndStep _: return true;
-                case LeftEndStep _:
-                case BottomEndStep _: return false;
+                return new Path(new List<Circle> { circle });
             }
 
-            steps.Add(currentStep);
-            currentStep = nextStep;
+            var start = IntersectingY(circle, 0, question.Area)
+                || IntersectingX(circle, question.Area.Width, question.Area);
+            if (start)
+            {
+                startPaths.Add(new Path(new List<Circle> { circle }));
+            }
+
+            var end = IntersectingY(circle, question.Area.Height, question.Area)
+                || IntersectingX(circle, 0, question.Area);
+            if (end)
+            {
+                endPaths.Add(new Path(new List<Circle> { circle }));
+            }
+
+            if (start && end)
+            {
+                return new Path(new List<Circle> { circle });
+            }
+
+            if (!start && !end)
+            {
+                currentCircles.Enqueue(circle);
+            }
+        }
+
+        foreach (var startPath in startPaths)
+        {
+            var startCircle = startPath.Circles.Last();
+            foreach (var endPath in endPaths)
+            {
+                var endCircle = endPath.Circles.Last();
+                if (IntersectingCircle(startCircle, endCircle, question.Area))
+                {
+                    return new Path(new List<Circle> { startCircle, endCircle });
+                }
+            }
+        }
+
+        while (currentCircles.Count > 0)
+        {
+            var currentCircle = currentCircles.Dequeue();
+
+            Path? targetPath = null;
+
+            foreach (var startPath in startPaths)
+            {
+                var pathCircle = startPath.Circles.Last();
+                if (IntersectingCircle(currentCircle, pathCircle, question.Area))
+                {
+                    startPath.Circles.Add(currentCircle);
+                    targetPath = startPath;
+                }
+            }
+
+            foreach (var endPath in endPaths)
+            {
+                var pathCircle = endPath.Circles.Last();
+                if (IntersectingCircle(currentCircle, pathCircle, question.Area))
+                {
+                    if (targetPath != null)
+                    {
+                        return new Path(
+                            targetPath.Circles
+                                .Concat(((IEnumerable<Circle>)endPath.Circles)
+                                .Reverse()).ToList()
+                        );
+                    }
+
+                    endPath.Circles.Add(currentCircle);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public static bool IntersectingCircle(Circle circle1, Circle circle2, Area area)
+    {
+        long dx = circle1.X - circle2.X;
+        long dy = circle1.Y - circle2.Y;
+        long radiusSum = circle1.Radius + circle2.Radius;
+
+        if (dx * dx + dy * dy > radiusSum * radiusSum)
+        {
+            return false;
+        }
+
+        var midpointX = ((long)circle1.X * circle2.Radius + (long)circle2.X * circle1.Radius) / (double)radiusSum;
+        var midpointY = ((long)circle1.Y * circle2.Radius + (long)circle2.Y * circle1.Radius) / (double)radiusSum;
+
+        return midpointX >= 0 && midpointX <= area.Width
+            && midpointY >= 0 && midpointY <= area.Height;
+    }
+
+    public static bool IntersectingX(Circle circle, int x, Area area)
+    {
+        var dx = circle.X - x;
+        if (Math.Abs(dx) <= circle.Radius)
+        {
+            var xy = Math.Sqrt((long)circle.Radius * circle.Radius - (long)dx * dx);
+            double y1 = circle.Y - xy;
+            double y2 = circle.Y + xy;
+
+            return (0 < y1 && y1 < area.Height)
+                || (0 < y2 && y2 < area.Height);
         }
 
         return false;
     }
-    private static IStep? MoveStep(IStep currentStep, Question question)
-        => currentStep switch
-        {
-            RightLineStep rightLineStep => MoveRight(rightLineStep, question),
-            DownLineStep downLineStep => MoveDown(downLineStep, question),
-            ArcStep arcStep => MoveArc(arcStep, question),
-            _ => throw new InvalidOperationException(),
-        };
 
-    private static IStep MoveRight(RightLineStep currentStep, Question question)
+    public static bool IntersectingY(Circle circle, int y, Area area)
     {
-        var arcStep = question.Circles
-            .SelectMany(circle =>
-            {
-                var delta = (long)circle.Radius * circle.Radius
-                    - (long)circle.Y * circle.Y;
-
-                if (delta < 0)
-                {
-                    return Array.Empty<ArcStep>();
-                }
-
-                var dx = Math.Sqrt(delta);
-                var xs = new[] { circle.X - dx, circle.X + dx };
-
-                return xs.Select(x => new ArcStep(x, 0, circle));
-            })
-            .Where(arcStep => arcStep.X > currentStep.X)
-            .Where(arcStep => arcStep.X < question.Area.Width)
-            .OrderBy(arcStep => arcStep.X)
-            .FirstOrDefault();
-
-        if (arcStep != null)
+        var dy = circle.Y - y;
+        if (Math.Abs(dy) <= circle.Radius)
         {
-            return arcStep;
+            double yx = Math.Sqrt((long)circle.Radius * circle.Radius - (long)dy * dy);
+            double x1 = circle.X - yx;
+            double x2 = circle.X + yx;
+
+            return (0 < x1 && x1 < area.Width)
+                || (0 < x2 && x2 < area.Width);
         }
 
-        return new DownLineStep(0);
-    }
-    private static IStep MoveDown(DownLineStep currentStep, Question question)
-    {
-        var arcStep = question.Circles
-            .SelectMany(circle =>
-            {
-                var delta = (long)circle.Radius * circle.Radius
-                    - (long)(question.Area.Width - circle.X) * (question.Area.Width - circle.X);
-
-                if (delta < 0)
-                {
-                    return Array.Empty<ArcStep>();
-                }
-
-                var dy = Math.Sqrt(delta);
-                var ys = new[] { circle.Y - dy, circle.Y + dy };
-
-                return ys.Select(y => new ArcStep(question.Area.Width, y, circle));
-            })
-            .Where(arcStep => arcStep.Y > currentStep.Y)
-            .Where(arcStep => arcStep.Y < question.Area.Height)
-            .OrderBy(arcStep => arcStep.Y)
-            .FirstOrDefault();
-
-        if (arcStep != null)
-        {
-            return arcStep;
-        }
-
-        return new CornerEndStep();
+        return false;
     }
 
-    private static IStep? MoveArc(ArcStep currentStep, Question question)
+    public static bool PointCovering(int x, int y, Circle circle)
     {
-        var currentAngle = Math.Atan2(
-            currentStep.Y - currentStep.Circle.Y,
-            currentStep.X - currentStep.Circle.X); ;
+        long dx = x - circle.X;
+        long dy = y - circle.Y;
 
-        while (currentAngle >= Math.PI * 2)
-        {
-            currentAngle -= Math.PI * 2;
-        }
-        while (currentAngle < 0)
-        {
-            currentAngle += Math.PI * 2;
-        }
-
-        var nexts = GetRightNexts(currentStep, question)
-            .Concat(GetDownNexts(currentStep, question))
-            .Concat(GetLeftNexts(currentStep, question))
-            .Concat(GetBottomNexts(currentStep, question))
-            .Concat(GetArcNexts(currentStep, question))
-            .ToArray();
-
-        return nexts
-            .Select(next =>
-            {
-                var angle = next.Angle;
-
-                while (angle >= Math.PI * 2)
-                {
-                    angle -= Math.PI * 2;
-                }
-                while (angle < 0)
-                {
-                    angle += Math.PI * 2;
-                }
-
-                angle -= currentAngle;
-
-                while (angle >= Math.PI * 2)
-                {
-                    angle -= Math.PI * 2;
-                }
-                while (angle < -0.000001)
-                {
-                    angle += Math.PI * 2;
-                }
-
-                angle += Random.Shared.NextDouble() * 0.000001;
-
-                return new ArcNext(angle, next.Step);
-            })
-            .OrderBy(next => next.Angle)
-            .Select(next => next.Step)
-            .LastOrDefault();
-    }
-
-    private static IEnumerable<ArcNext> GetRightNexts(ArcStep currentStep, Question question)
-        => GetXIntersects(currentStep, 0, question)
-            .Select(xIntersect => new ArcNext(xIntersect.Angle, new RightLineStep(xIntersect.X)));
-    private static IEnumerable<ArcXIntersect> GetXIntersects(ArcStep currentStep, double y, Question question)
-    {
-        var delta = (long)currentStep.Circle.Radius * currentStep.Circle.Radius
-            - (long)(y - currentStep.Circle.Y) * (y - currentStep.Circle.Y);
-
-        if (delta < 0)
-        {
-            return Array.Empty<ArcXIntersect>();
-        }
-
-        var dx = Math.Sqrt(delta);
-        var xs = new[] {
-            currentStep.Circle.X + dx,
-            currentStep.Circle.X - dx
-        };
-
-        return xs
-            .Where(x => x >= 0)
-            .Where(x => x <= question.Area.Width)
-            .Select(x => new ArcXIntersect(x,
-                Math.Atan2(y - currentStep.Circle.Y, x - currentStep.Circle.X)));
-    }
-    private static IEnumerable<ArcNext> GetDownNexts(ArcStep currentStep, Question question)
-        => GetYIntersects(currentStep, question.Area.Width, question)
-            .Select(yIntersect => new ArcNext(yIntersect.Angle, new DownLineStep(yIntersect.Y)));
-    private static IEnumerable<ArcYIntersect> GetYIntersects(ArcStep currentStep, double x, Question question)
-    {
-        var delta = (long)currentStep.Circle.Radius * currentStep.Circle.Radius
-            - (long)(x - currentStep.Circle.X) * (x - currentStep.Circle.X);
-
-        if (delta < 0)
-        {
-            return Array.Empty<ArcYIntersect>();
-        }
-
-        var dy = Math.Sqrt(delta);
-        var ys = new[] {
-            currentStep.Circle.Y + dy,
-            currentStep.Circle.Y - dy
-        };
-
-        return ys
-            .Where(y => y >= 0)
-            .Where(y => y <= question.Area.Height)
-            .Select(y => new ArcYIntersect(y,
-                Math.Atan2(y - currentStep.Circle.Y, x - currentStep.Circle.X)));
-    }
-    private static IEnumerable<ArcNext> GetLeftNexts(ArcStep currentStep, Question question)
-        => GetYIntersects(currentStep, 0, question)
-            .Select(intersect => new ArcNext(intersect.Angle, new LeftEndStep(intersect.Y)));
-    private static IEnumerable<ArcNext> GetBottomNexts(ArcStep currentStep, Question question)
-        => GetXIntersects(currentStep, question.Area.Height, question)
-            .Select(intersect => new ArcNext(intersect.Angle, new BottomEndStep(intersect.X)));
-
-    private static IEnumerable<ArcNext> GetArcNexts(ArcStep currentStep, Question question)
-    {
-        var circles = question.Circles.Except(new[] { currentStep.Circle });
-
-        return circles.SelectMany(circle =>
-            GetCircleIntersects(currentStep.Circle, circle)
-            .Where(intersect =>
-                intersect.X > 0 && intersect.X < question.Area.Width
-                && intersect.Y > 0 && intersect.Y < question.Area.Height)
-            .Select(intersect => new ArcNext(
-                Math.Atan2(intersect.Y - currentStep.Circle.Y, intersect.X - currentStep.Circle.X),
-                new ArcStep(intersect.X, intersect.Y, circle))));
-    }
-    private static IEnumerable<CircleIntersect> GetCircleIntersects(Circle a, Circle b)
-    {
-        long dx = b.X - a.X;
-        long dy = b.Y - a.Y;
-        var d = Math.Sqrt(dx * dx + dy * dy);
-
-        if (d > a.Radius + b.Radius
-            || d < Math.Abs(a.Radius - b.Radius))
-        {
-            yield break;
-        }
-
-        var a2 = ((long)a.Radius * a.Radius - (long)b.Radius * b.Radius + d * d) / (2 * d);
-        var h = Math.Sqrt((long)a.Radius * a.Radius - a2 * a2);
-
-        var xm = a.X + a2 * dx / d;
-        var ym = a.Y + a2 * dy / d;
-
-        yield return new CircleIntersect(
-            xm + h * dy / d,
-            ym - h * dx / d);
-
-        yield return new CircleIntersect(
-            xm - h * dy / d,
-            ym + h * dx / d);
+        return dx * dx + dy * dy <= (long)circle.Radius * circle.Radius;
     }
 }
 
-record Question(Area Area, Circle[] Circles);
-record Area(int Width, int Height);
-record Circle(int X, int Y, int Radius);
+public record class Question(Area Area, List<Circle> Circles);
+public record Area(int Width, int Height);
+public record Circle(int X, int Y, int Radius);
 
-interface IStep { }
-record RightLineStep(double X) : IStep;
-record DownLineStep(double Y) : IStep;
-record ArcStep(double X, double Y, Circle Circle) : IStep;
-record CornerEndStep() : IStep;
-record LeftEndStep(double Y) : IStep;
-record BottomEndStep(double X) : IStep;
-
-record ArcNext(double Angle, IStep Step);
-record ArcXIntersect(double X, double Angle);
-record ArcYIntersect(double Y, double Angle);
-record CircleIntersect(double X, double Y);
+public record Path(List<Circle> Circles);

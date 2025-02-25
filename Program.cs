@@ -1,10 +1,22 @@
 ﻿var solution = new Solution();
 
 Console.WriteLine(solution.CanReachCorner(
-    500000000, 500000000, new int[][] {
-        new int[] { 499980000, 699999999, 200000000},
-        new int[] { 500020000, 300000001, 200000000} })
+    22742157, 210809967, new int[][] {
+        new int[] { 22741186, 210810964, 200 },
+        new int[] { 22741869, 210809432, 165 },
+        new int[] { 22742256, 210810275, 182 },
+        new int[] { 22742089, 210809693, 129 },
+        new int[] { 22741912, 210810128, 196 },
+        new int[] { 22741658, 210809205, 144 },
+        new int[] { 22741648, 210809094, 118 },
+        new int[] { 22741920, 210809808, 128 } })
     == false ? "CORRECT" : "INCORRECT");
+
+Console.WriteLine(solution.CanReachCorner(
+    500000000, 500000000, new int[][] {
+        new int[] { 499980000, 699999999, 200000000 },
+        new int[] { 500020000, 300000001, 200000000 } })
+    == true ? "CORRECT" : "INCORRECT");
 
 Console.WriteLine(solution.CanReachCorner(
     8, 6, new int[][] {
